@@ -129,3 +129,8 @@ Drought is explicitly a **dry-spell proxy**, defined here as 15+ consecutive day
 Both hazards use the existing annual event/day metrics, rolling averages, coverage and trend suppression, with precipitation charts/event values in mm and hazard-specific CSV headers/filenames. Cache identities include hazard and algorithm version; precipitation raw data has a distinct weather-cache key. Old heatwave requests remain compatible when hazard is omitted. A hazard change clears the displayed result before the next run.
 
 Verification after this change: 32 backend tests passed (one dependency deprecation warning); TypeScript check passed. New browser regression coverage is added for dropdown payloads, precipitation units, state reset and hazard CSV downloads, but browser execution and live precipitation-provider checks remain pending. Run the full frontend suite and production build before release.
+
+
+## Hosting setup
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for Render + Vercel + MongoDB Atlas deployment. The repository includes a Render Blueprint and Vercel build configuration. Hosting readiness uses `/api/ready` (HTTP 503 when MongoDB is unavailable). These files do not mean a live deployment exists.

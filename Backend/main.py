@@ -99,6 +99,17 @@ def health():
     return {'status': 'ok' if db is not None else 'database_unavailable', 'database': db is not None}
 
 
+@app.get('/api/ready')
+async def ready():
+    if db is None:
+        raise HTTPException(503, 'Database unavailable')
+    try:
+        await asyncio.to_thread(db.command, 'ping')
+    except Exception:
+        raise HTTPException(503, 'Database unavailable')
+    return {'status': 'ready'}
+
+
 @app.get('/api/regions')
 async def regions(q: str = ''):
     if not 2 <= len(q.strip()) <= 80:

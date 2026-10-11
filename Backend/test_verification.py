@@ -186,3 +186,21 @@ def test_hazard_api_cache_isolation_and_precipitation_source(monkeypatch):
             assert result['baseline']==[]
     assert calls.count('precipitation_sum')==3
     assert client.post('/api/analyze',json={**body,'hazard':'invalid'}).status_code==422
+
+
+def test_hosted_readiness_requires_working_database(monkeypatch):
+    main.limits.clear()
+    client = TestClient(main.app)
+    monkeypatch.setattr(main, 'db', None)
+    assert client.get('/api/ready').status_code == 503
+    class Database:
+        fail = False
+        def command(self, name):
+            assert name == 'ping'
+            if self.fail: raise RuntimeError('connection lost')
+            return {'ok': 1}
+    database = Database()
+    monkeypatch.setattr(main, 'db', database)
+    assert client.get('/api/ready').json() == {'status':'ready'}
+    database.fail = True
+    assert client.get('/api/ready').status_code == 503
