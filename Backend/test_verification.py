@@ -204,3 +204,22 @@ def test_hosted_readiness_requires_working_database(monkeypatch):
     assert client.get('/api/ready').json() == {'status':'ready'}
     database.fail = True
     assert client.get('/api/ready').status_code == 503
+
+
+@pytest.mark.parametrize('status,message', [(429,'rate limit'),(403,'denied access'),(500,'HTTP 500')])
+def test_weather_provider_status_diagnostic(monkeypatch, status, message):
+    import asyncio
+    from fastapi import HTTPException
+    class Database:
+        weather = Collection()
+    class Upstream:
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): pass
+        async def get(self, url, **kwargs):
+            return httpx.Response(status, json={'reason':'provider rejection'}, request=httpx.Request('GET',url))
+    monkeypatch.setattr(main,'db',Database())
+    monkeypatch.setattr(main.httpx,'AsyncClient',lambda **kwargs:Upstream())
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(main.fetch_weather(28.6,77.2,2020,2021))
+    assert error.value.status_code == 502
+    assert message in error.value.detail

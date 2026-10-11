@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import json
+import logging
 import os
 import time
 from collections import defaultdict, deque
@@ -16,6 +17,8 @@ from pymongo import MongoClient
 from climate import analyze, clean, clean_precipitation, percentile
 from locations import normalize_locations, normalize_map_regions
 from typing import Literal
+
+logger = logging.getLogger('uvicorn.error')
 
 load_dotenv()
 BASELINE = (1981, 2010)
@@ -176,7 +179,25 @@ async def fetch_weather(latitude, longitude, start, end, variable='temperature_2
                 raise ValueError('Invalid weather dates')
         await asyncio.to_thread(db.weather.replace_one, {'_id': key}, {'_id': key, 'records': records}, upsert=True)
         return records
-    except (httpx.HTTPError, ValueError, KeyError, TypeError):
+    except httpx.HTTPStatusError as exc:
+        status = exc.response.status_code
+        # Only this fixed, unauthenticated weather endpoint is involved.
+        # Do not log environment variables, DB exceptions or connection URIs.
+        reason = ''
+        try:
+            reason = str(exc.response.json().get('reason', ''))[:300]
+        except (ValueError, AttributeError):
+            pass
+        logger.warning('Open-Meteo weather request rejected: HTTP %s; reason=%r', status, reason)
+        if status == 429:
+            detail = 'Historical weather provider rate limit reached. Please wait and retry.'
+        elif status in (401, 403):
+            detail = 'Historical weather provider denied access from the hosted backend. Provider configuration must be checked.'
+        else:
+            detail = f'Historical weather provider returned HTTP {status}. Please retry; if it persists, check backend logs.'
+        raise HTTPException(502, detail)
+    except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
+        logger.warning('Open-Meteo weather request failed: %s', type(exc).__name__)
         raise HTTPException(502, 'Historical weather service unavailable or returned invalid data. Please retry.')
 
 
